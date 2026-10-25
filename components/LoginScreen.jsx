@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { BookOpen, Download, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { loginWithToken } from '../lib/api';
 import useStore from '../lib/store';
@@ -70,6 +70,18 @@ export default function LoginScreen({ helpContent }) {
             </button>
           </div>
         </form>
+        <div className="token-tool">
+          <div>
+            <p className="block-label">PC 端一键取 Token</p>
+            <p className="token-tool-copy">
+              在电脑版微信打开小程序后，下载并双击运行 <strong>token提取.exe</strong>，它会自动把 Token 复制到剪贴板，回到本页粘贴即可。
+            </p>
+          </div>
+          <a className="action-button secondary token-tool-download" href="/downloads/token-extract.exe" download="token提取.exe">
+            <Download size={18} aria-hidden="true" />下载 Token 提取工具（Windows）
+          </a>
+          <p className="token-tool-note">仅 Windows 可用 · 约 8.5 MB · 双击运行，无安装步骤 · 需要先在 PC 微信里打开阳光跑小程序</p>
+        </div>
       </section>
       <MarkdownDialog open={helpOpen} onClose={() => setHelpOpen(false)} title="使用说明">
         {helpContent}

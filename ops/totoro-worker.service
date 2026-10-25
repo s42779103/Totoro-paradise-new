@@ -10,6 +10,7 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/totoro-runtime/current
 Environment=NODE_ENV=production
+Environment=TZ=Asia/Shanghai
 Environment=REDIS_URL=redis://127.0.0.1:6379
 Environment=SUNRUN_MINIPROGRAM_BASE_URL=https://wxxcx.xtotoro.com
 Environment=SUNRUN_MINIPROGRAM_FALLBACK_BASE_URL=https://app.xtotoro.com

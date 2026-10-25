@@ -14,13 +14,11 @@ export default function DashboardPage() {
   const { hasHydrated, isLoggedIn, userInfo, getAuthData, logout } = useStore();
   const [tasks, setTasks] = useState([]);
   const [taskId, setTaskId] = useState('');
-  const [pointId, setPointId] = useState('');
   const [taskError, setTaskError] = useState('');
   const [tasksLoading, setTasksLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   const [activeTaskType, setActiveTaskType] = useState('run');
   const task = tasks.find(item => item.taskId === taskId) || tasks[0];
-  const route = task?.runPointList.find(point => point.pointId === pointId) || task?.runPointList[0];
 
   useEffect(() => {
     if (!hasHydrated || !isLoggedIn) return;
@@ -99,24 +97,17 @@ export default function DashboardPage() {
         {task && (
           <div className="form-grid">
             <label><span>跑步任务</span>
-              <select value={task.taskId} onChange={event => { setTaskId(event.target.value); setPointId(''); }}>
+              <select value={task.taskId} onChange={event => setTaskId(event.target.value)}>
                 {tasks.map(item => <option key={item.taskId} value={item.taskId}>{item.name}</option>)}
               </select>
             </label>
-            <label><span>跑步路线</span>
-              <select value={task.runPointList.some(point => point.pointId === pointId) ? pointId : task.runPointList[0]?.pointId || ''}
-                disabled={!task.runPointList.length} onChange={event => setPointId(event.target.value)}>
-                {!task.runPointList.length && <option value="">暂无路线</option>}
-                {task.runPointList.map(point => <option key={point.pointId} value={point.pointId}>{point.pointName}</option>)}
-              </select>
-            </label>
-            <p className="limit-note">{task.mileage} 公里 · {task.minTime}–{task.maxTime} 分钟<br />
+            <p className="limit-note">{task.mileage} 公里 · {task.minTime}–{task.maxTime} 分钟 · {task.runPointList.length} 条路线<br />
               {task.startDate} 至 {task.endDate}<br />
               {task.runTimeRuleList.map(rule => `${rule.startTime}–${rule.endTime}`).join(' / ')}
             </p>
           </div>
         )}
-        {!tasksLoading && <StartRunPanel key={`${task?.taskId || ''}:${route?.pointId || ''}`} task={task} route={route} />}
+        {!tasksLoading && <StartRunPanel key={task?.taskId || ''} task={task} />}
       </section> : <section id="morning-task-panel" role="tabpanel" aria-labelledby="morning-task-tab">
         <MorningSignPanel />
       </section>}

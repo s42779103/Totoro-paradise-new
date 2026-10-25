@@ -851,3 +851,35 @@ select {
     padding: 14px 22px;
   }
 }
+
+.route-select { display: grid; gap: 6px; margin-bottom: 16px; }
+.route-select span { color: var(--muted); font-size: 13px; }
+.run-metrics .metric-input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.link-button {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-button:hover { color: var(--ink); }
+
+.token-tool {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 3px solid var(--line);
+}
+.token-tool-copy { margin: 6px 0 0; line-height: 1.6; }
+.token-tool-download { display: inline-flex; align-items: center; gap: 8px; justify-content: center; text-decoration: none; }
+.token-tool-note { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }

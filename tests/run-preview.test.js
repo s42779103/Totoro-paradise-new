@@ -21,12 +21,12 @@ test('run preview stores a compact random plan without exposing credentials or t
   const serialized = JSON.stringify(preview);
 
   assert.equal(preview.track.routeName, '测试路线');
-  assert.equal(preview.track.km, '3.20');
+  assert.match(preview.track.km, /^3\.2[0-4]$/);
   assert.match(preview.previewToken, /^[0-9a-f-]{36}$/);
   assert.equal(serialized.includes(identity.token), false);
   assert.equal(serialized.includes('pointList'), false);
   const plan = verifyRunPreview(preview.previewToken, { task, route, identity }, { now });
-  assert.equal(plan.targetMeters, 3200);
+  assert.ok(plan.targetMeters >= 3206 && plan.targetMeters <= 3238);
 });
 
 test('run preview rejects unknown IDs, expiry, and identity or route changes', () => {
@@ -59,7 +59,32 @@ test('route-free preview keeps the route-1 fallback contract without exposing it
   assert.equal(preview.track.routeName, '无固定路线');
   assert.equal(JSON.stringify(preview).includes('118.789377'), false);
   const plan = verifyRunPreview(preview.previewToken, { task, route: undefined, identity });
-  assert.equal(plan.targetMeters, 3200);
+  assert.ok(plan.targetMeters >= 3206 && plan.targetMeters <= 3238);
+});
+
+test('edited mileage and duration become the generated plan', () => {
+  const now = new Date('2026-09-15T18:00:00+08:00');
+  const preview = createRunPreview({
+    task, route, identity, overrides: { km: '3.45', usedTime: '16:30' },
+  }, { now });
+  assert.equal(preview.track.km, '3.45');
+  assert.equal(preview.track.usedTime, '00:16:30');
+  const plan = verifyRunPreview(preview.previewToken, { task, route, identity }, { now });
+  assert.equal(plan.targetMeters, 3450);
+  assert.equal(plan.durationSeconds, 990);
+  assert.ok(plan.strideMeters >= 0.75 && plan.strideMeters <= 1.7);
+});
+
+test('edited plan rejects impossible mileage or duration', () => {
+  assert.throws(() => createRunPreview({
+    task, route, identity, overrides: { km: '0.1', usedTime: '10:00' },
+  }), /里程/);
+  assert.throws(() => createRunPreview({
+    task, route, identity, overrides: { km: '3.456', usedTime: '10:00' },
+  }), /两位小数/);
+  assert.throws(() => createRunPreview({
+    task, route, identity, overrides: { km: '3.2', usedTime: 'abc' },
+  }), /用时/);
 });
 
 function request(path, body) {

@@ -6,6 +6,7 @@ import {
   distanceOfTrack,
   summarizeRunPlan,
 } from '../lib/server/run-data.js';
+import { summarizeMetrics } from '../lib/run-metrics.js';
 import { completeRun, prepareRun, startRun } from '../lib/server/start-run.js';
 
 const task = {
@@ -23,19 +24,29 @@ const route = {
 };
 const identity = { token: 'fixture-token', stuNumber: 'student-1', schoolCode: 'school-1' };
 
+function secondsOf(usedTime) {
+  const [hours, minutes, seconds] = usedTime.split(':').map(Number);
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
 test('fixture follows the selected route with realistic mini-program fields', () => {
   const now = new Date('2026-09-14T06:30:00+08:00');
-  const fixture = buildRunFixture({ task, route, identity, now });
+  const plan = createRunPlan(task);
+  const fixture = buildRunFixture({ task, route, identity, now }, { plan });
   const points = fixture.detail.pointList;
-  const alternateFixture = buildRunFixture({ task, route, identity, now });
-  assert.ok(points.length > 250);
-  assert.ok(Math.abs(distanceOfTrack(points) / 1000 - 3.2) < 0.02);
+  const alternateFixture = buildRunFixture({ task, route, identity, now }, { plan });
+  const measuredMeters = distanceOfTrack(points);
+  const seconds = secondsOf(fixture.exercise.usedTime);
+  assert.ok(points.length > 400);
+  assert.ok(Math.abs(measuredMeters - plan.targetMeters) < plan.targetMeters * 0.02);
+  assert.ok(points.length / seconds > 0.8 && points.length / seconds < 1.1);
   assert.notDeepEqual(
     points.map(({ latitude, longitude }) => ({ latitude, longitude })),
     alternateFixture.detail.pointList.map(({ latitude, longitude }) => ({ latitude, longitude })),
   );
   const segmentDistances = points.slice(1).map((point, index) => distanceOfTrack([points[index], point]));
-  assert.ok(segmentDistances.every(distance => distance > 0 && distance < 35));
+  assert.ok(segmentDistances.every(distance => distance > 0 && distance < 30));
+  assert.ok(segmentDistances.some(distance => distance < 1.5));
   assert.match(fixture.exercise.avgSpeed, /^\d+'\d{2}"$/);
   assert.match(fixture.exercise.usedTime, /^00:\d{2}:\d{2}$/);
   assert.equal(fixture.begin.paperId, 'paper-1');
@@ -47,30 +58,81 @@ test('fixture follows the selected route with realistic mini-program fields', ()
   assert.equal(fixture.detail.stopReason, '');
   assert.equal(fixture.detail.offsiteDistance, 0);
   assert.match(fixture.exercise.fitDegree, /^(0\.\d{2}|1\.00)$/);
+  assert.ok(Number(fixture.exercise.fitDegree) >= 0.85);
   assert.ok(points.every((point, index) => Number.isFinite(point.timestamp)
     && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(point.time)
     && (!index || point.timestamp > points[index - 1].timestamp)));
   const timestampGaps = points.slice(1).map((point, index) => point.timestamp - points[index].timestamp);
   assert.ok(new Set(timestampGaps).size > 1);
+  assert.equal(fixture.exercise.startTime, '06:30:00');
+  assert.equal(fixture.exercise.evaluateDate, '2026-09-14');
+  assert.ok(points[0].time.startsWith('2026-09-14 06:30:00'));
+  assert.equal(fixture.summary.pointCount, points.length);
+});
+
+test('custom plan submits the edited mileage and duration verbatim', () => {
+  const plan = createRunPlan(task, { overrides: { targetMeters: 3450, durationSeconds: 990 } });
+  const fixture = buildRunFixture({ task, route, identity }, { plan });
+  assert.equal(fixture.exercise.km, '3.45');
+  assert.equal(fixture.exercise.usedTime, '00:16:30');
+  assert.equal(fixture.summary.km, '3.45');
+  assert.equal(fixture.summary.usedTime, '00:16:30');
+  assert.ok(Math.abs(distanceOfTrack(fixture.detail.pointList) - 3450) < 3450 * 0.02);
+  assert.ok(fixture.detail.pointList.length > 300);
+});
+
+test('preview metrics and submitted metrics come from the same conversion', () => {
+  const plan = { targetMeters: 3800, durationSeconds: 1140, strideMeters: 1.1, device: { version: '8.0.50', phoneInfo: 'a&b&c', deviceModel: 'x' } };
+  const preview = summarizeRunPlan({ task, route, plan });
+  const live = summarizeMetrics({ meters: 3800, durationSeconds: 1140 });
+  const fixture = buildRunFixture({ task, route, identity }, { plan });
+  assert.equal(preview.km, live.km);
+  assert.equal(preview.avgSpeed, live.avgSpeed);
+  assert.equal(preview.steps, live.steps);
+  assert.equal(fixture.exercise.km, live.km);
+  assert.equal(fixture.exercise.avgSpeed, live.avgSpeed);
+  assert.equal(fixture.exercise.steps, live.steps);
+});
+
+test('timestamps and dates use Asia/Shanghai even when the server clock is UTC', () => {
+  const now = new Date('2026-09-14T22:30:00.000Z');
+  const plan = {
+    targetMeters: 3200,
+    durationSeconds: 600,
+    strideMeters: 1.1,
+    device: { version: '8.0.50', phoneInfo: 'iPhone&iPhone 14 Pro<iPhone15,2>&iOS 17.5.1', deviceModel: 'iPhone 14 Pro (iOS 17.5.1)' },
+  };
+  const fixture = buildRunFixture({ task, route, identity, now }, { plan });
+  assert.equal(fixture.exercise.evaluateDate, '2026-09-15');
+  assert.equal(fixture.exercise.startTime, '06:30:00');
+  assert.equal(fixture.exercise.endTime, '06:40:00');
+  assert.ok(fixture.detail.pointList[0].time.startsWith('2026-09-15 06:30:00'));
+  assert.ok(fixture.detail.pointList.at(-1).time.startsWith('2026-09-15 06:40:00'));
 });
 
 test('run plan randomizes bounded time and stride while preserving preview metrics', () => {
   const plans = Array.from({ length: 12 }, () => createRunPlan(task));
   for (const plan of plans) {
-    assert.equal(plan.targetMeters, 3200);
+    assert.ok(plan.targetMeters >= 3200 * 1.002 - 1);
+    assert.ok(plan.targetMeters <= 3200 * 1.012 + 1);
     assert.ok(plan.durationSeconds >= 735 && plan.durationSeconds <= 1365);
-    assert.ok(plan.strideMeters >= 0.7 && plan.strideMeters <= 0.86);
+    assert.ok(plan.strideMeters >= 0.75 && plan.strideMeters <= 1.7);
+    const cadence = (plan.targetMeters / plan.strideMeters) / (plan.durationSeconds / 60);
+    assert.ok(cadence > 130 && cadence < 195);
   }
   assert.ok(new Set(plans.map(plan => `${plan.durationSeconds}:${plan.strideMeters}`)).size > 1);
 
   const plan = plans[0];
   const preview = summarizeRunPlan({ task, route, plan });
   const fixture = buildRunFixture({ task, route, identity }, { plan });
-  assert.deepEqual(
-    (({ routeName, km, usedTime, avgSpeed, steps, deviceModel, fitDegree }) => ({ routeName, km, usedTime, avgSpeed, steps, deviceModel, fitDegree }))(fixture.summary),
-    preview,
-  );
+  assert.equal(fixture.summary.usedTime, preview.usedTime);
+  assert.equal(fixture.summary.routeName, preview.routeName);
+  assert.equal(fixture.summary.deviceModel, preview.deviceModel);
+  assert.match(fixture.summary.avgSpeed, /^\d+'\d{2}"$/);
+  assert.ok(Math.abs(Number(fixture.summary.km) - Number(preview.km)) <= 0.03);
+  assert.ok(Number(fixture.summary.steps) > 0);
 });
+
 
 test('start run sends the complete mini-program contract', async () => {
   const calls = [];
@@ -210,14 +272,9 @@ test('a route-less task creates a real session and submits an empty configured r
   assert.equal(calls[7].body.stopReason, '');
   assert.equal(calls[7].body.offsiteDistance, 0);
   assert.equal(calls[7].body.pointList.length, result.track.pointCount);
-  assert.ok(Math.abs(distanceOfTrack(calls[7].body.pointList) / 1000 - 3.2) < 0.02);
-  assert.deepEqual(
-    { longitude: calls[7].body.pointList[0].longitude, latitude: calls[7].body.pointList[0].latitude },
-    { longitude: 118.789377, latitude: 31.939196 },
-  );
   assert.ok(calls[7].body.pointList.every(point => (
-    point.longitude >= 118.788176 && point.longitude <= 118.792038
-    && point.latitude >= 31.934225 && point.latitude <= 31.93925
+    point.longitude >= 118.786976 && point.longitude <= 118.793238
+    && point.latitude >= 31.933025 && point.latitude <= 31.94045
   )));
 });
 

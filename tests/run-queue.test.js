@@ -168,6 +168,38 @@ test('getRunBegin is logged before a later preparation stage fails', async () =>
   assert.ok(events.every(event => event.context.request_id === 'job-points-failed'));
 });
 
+test('confirmed run rejects an off-window start before it touches Redis or getRunBegin', async () => {
+  const added = [];
+  await assert.rejects(executeConfirmedRun({
+    task: { ...task, startDate: '2026-09-01', endDate: '2026-09-02' },
+    route,
+    ...identity,
+  }, {
+    plan,
+    queue: { add: async (...args) => added.push(args) },
+    now: new Date('2026-09-15T10:00:00.000Z'),
+    prepareRunImpl: async () => { throw new Error('must not prepare'); },
+    logRunEventImpl: () => {},
+  }), /日期/);
+  assert.equal(added.length, 0);
+});
+
+test('confirmed run refuses a route-configured task without a selected route', async () => {
+  const added = [];
+  await assert.rejects(executeConfirmedRun({
+    task: { ...task, runPointList: [{ pointId: 'line-1', pointName: '测试路线' }] },
+    route: undefined,
+    ...identity,
+  }, {
+    plan,
+    queue: { add: async (...args) => added.push(args) },
+    now: new Date('2026-09-15T10:00:00.000Z'),
+    prepareRunImpl: async () => { throw new Error('must not prepare'); },
+    logRunEventImpl: () => {},
+  }), /请选择路线/);
+  assert.equal(added.length, 0);
+});
+
 test('job status is bound to the same student and school', async () => {
   const built = buildDelayedRunJob({ input: { task, route, ...identity }, plan, session, track }, {
     jobId: 'job-3', env,
