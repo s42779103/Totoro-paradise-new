@@ -1,4 +1,8 @@
-## 因部分原因，本网站或于月底停运，若有不便尽情谅解
+网站fork自https://github.com/yuyuyudlc/Totoro
+
+---
+
+--因部分原因，本网站或于月底停运，若有不便尽情谅解--
 
 ![截图](./img/shutdown-notice.jpg)
 
